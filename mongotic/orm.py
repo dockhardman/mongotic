@@ -18,7 +18,9 @@ class Session(Protocol):
     def __init__(self, bind_engine: MongoClient, **kwargs: Any):
         ...
 
-    def query(self, *args: Any, **kwargs: Any):
+    def query(
+        self, base_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
+    ) -> QuerySet:
         ...
 
     def add(self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
@@ -39,7 +41,9 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
         def __init__(self, *args, **kwargs: Any):
             self.engine = bind
 
-        def query(self, *args: Any, **kwargs: Any):
+        def query(
+            self, base_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
+        ) -> QuerySet:
             return
 
         def add(

@@ -2,11 +2,14 @@ from datetime import datetime
 from typing import Optional, Text
 
 from pyassorted.datetime import aware_datetime_now
+from pyassorted.string import rand_str
 from pydantic import Field
 from pymongo import MongoClient
 
 from mongotic.model import MongoBaseModel
 from mongotic.orm import sessionmaker
+
+test_company = f"test_{rand_str(10)}"
 
 
 class User(MongoBaseModel):
@@ -32,7 +35,17 @@ def test_add_operation(mongo_engine: "MongoClient"):
     session = Session()
 
     new_user = User(
-        name="John Doe", email="johndoe@example.com", company="ACME", age=30
+        name="John Doe", email="johndoe@example.com", company=test_company, age=30
     )
     new_user_id = session.add(new_user)
     assert new_user_id
+
+
+def test_query_operation(mongo_engine: "MongoClient"):
+    Session = sessionmaker(bind=mongo_engine)
+    session = Session()
+
+    users = session.query(User).all()
+    assert len(users) == 1
+
+    user = session.query(User).filter_by(name="John Doe").first()
