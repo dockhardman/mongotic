@@ -28,10 +28,10 @@ class Session(Protocol):
         ...
 
 
-def sessionmaker() -> Type[Session]:
+def sessionmaker(bind: "MongoClient") -> Type[Session]:
     class _Session:
-        def __init__(self, bind_engine: "MongoClient", **kwargs: Any):
-            self.engine = bind_engine
+        def __init__(self, *args, **kwargs: Any):
+            self.engine = bind
 
         def query(self, *args: Any, **kwargs: Any):
             return
