@@ -4,8 +4,8 @@ NOT_SET_SENTINEL = object()
 
 
 class MongoBaseModel(BaseModel):
-    __tablename__ = NOT_SET_SENTINEL
     __databasename__ = NOT_SET_SENTINEL
+    __tablename__ = NOT_SET_SENTINEL
 
 
 if __name__ == "__main__":
