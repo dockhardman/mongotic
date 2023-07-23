@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Optional, Text
+
+from pydantic import BaseModel, PrivateAttr
 
 NOT_SET_SENTINEL = object()
 
@@ -6,6 +8,8 @@ NOT_SET_SENTINEL = object()
 class MongoBaseModel(BaseModel):
     __databasename__ = NOT_SET_SENTINEL
     __tablename__ = NOT_SET_SENTINEL
+
+    _id: Optional[Text] = PrivateAttr(None)
 
 
 if __name__ == "__main__":

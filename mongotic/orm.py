@@ -56,7 +56,8 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
             doc = model_instance.model_dump()
             result = col.insert_one(doc)
 
-            return str(result.inserted_id)
+            model_instance._id = str(result.inserted_id)
+            return model_instance._id
 
         def commit(self, *args: Any, **kwargs: Any) -> None:
             with self.engine.start_session() as session:
