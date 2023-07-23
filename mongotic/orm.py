@@ -1,9 +1,15 @@
-from typing import Any, Protocol, Type
+from typing import Any, Protocol, Text, Type
 
 from pymongo import MongoClient
 from typing_extensions import ParamSpec
 
+from mongotic.model import NOT_SET_SENTINEL, MongoBaseModel
+
 P = ParamSpec("P")
+
+
+class QuerySet:
+    pass
 
 
 class Session(Protocol):
@@ -15,7 +21,7 @@ class Session(Protocol):
     def query(self, *args: Any, **kwargs: Any):
         ...
 
-    def add(self, *args: Any, **kwargs: Any):
+    def add(self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
         ...
 
     def commit(self, *args: Any, **kwargs: Any) -> None:
@@ -36,8 +42,21 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
         def query(self, *args: Any, **kwargs: Any):
             return
 
-        def add(self, *args: Any, **kwargs: Any):
-            return
+        def add(
+            self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any
+        ) -> Text:
+            if model_instance.__databasename__ is NOT_SET_SENTINEL:
+                raise ValueError("Database name is not set")
+            if model_instance.__tablename__ is NOT_SET_SENTINEL:
+                raise ValueError("Table name is not set")
+
+            db = self.engine[model_instance.__databasename__]
+            col = db[model_instance.__tablename__]
+
+            doc = model_instance.model_dump()
+            result = col.insert_one(doc)
+
+            return str(result.inserted_id)
 
         def commit(self, *args: Any, **kwargs: Any) -> None:
             with self.engine.start_session() as session:
