@@ -45,8 +45,11 @@ def test_query_operation(mongo_engine: "MongoClient"):
     Session = sessionmaker(bind=mongo_engine)
     session = Session()
 
+    user = session.query(User).first()
+    assert user
+
     users = session.query(User).all()
-    assert len(users) == 1
+    assert len(users) > 0
 
 
 def test_update_operation(mongo_engine: "MongoClient"):

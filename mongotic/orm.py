@@ -3,12 +3,33 @@ from typing import Any, List, Protocol, Text, Type
 from pymongo import MongoClient
 from typing_extensions import ParamSpec
 
+from mongotic.exceptions import NotFound
 from mongotic.model import NOT_SET_SENTINEL, MongoBaseModel
 
 P = ParamSpec("P")
 
 
 class QuerySet:
+    def __init__(
+        self,
+        orm_model: Type["MongoBaseModel"],
+        *args: Any,
+        engine: "MongoClient",
+        **kwargs: Any
+    ):
+        self.orm_model = orm_model
+        self.engine = engine
+
+        if self.orm_model.__databasename__ is NOT_SET_SENTINEL:
+            raise ValueError("Database name is not set")
+        if self.orm_model.__tablename__ is NOT_SET_SENTINEL:
+            raise ValueError("Table name is not set")
+
+        self._db_name: Text = self.orm_model.__databasename__
+        self._col_name: Text = self.orm_model.__tablename__
+        self._limit = 5
+        self._offset = 0
+
     def filter_by(self, *args: Any, **kwargs: Any) -> "QuerySet":
         ...
 
@@ -19,10 +40,24 @@ class QuerySet:
         ...
 
     def first(self, *args: Any, **kwargs: Any) -> "MongoBaseModel":
-        ...
+        collection = self.engine[self._db_name][self._col_name]
+        doc_raw = collection.find_one()
+        if not doc_raw:
+            raise NotFound
+
+        doc_raw["_id"] = str(doc_raw["_id"])
+        doc = self.orm_model(**doc_raw)
+        return doc
 
     def all(self, *args: Any, **kwargs: Any) -> List["MongoBaseModel"]:
-        ...
+        docs: List["MongoBaseModel"] = []
+
+        collection = self.engine[self._db_name][self._col_name]
+        for _doc in collection.find().skip(self._offset).limit(self._limit):
+            _doc["_id"] = str(_doc["_id"])
+            docs.append(self.orm_model(**_doc))
+
+        return docs
 
 
 class Session(Protocol):
@@ -32,21 +67,17 @@ class Session(Protocol):
         ...
 
     def query(
-        self, base_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
+        self, orm_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
     ) -> QuerySet:
         ...
 
-    def add(self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
+    def add(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
         ...
 
-    def update(
-        self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any
-    ) -> Text:
+    def update(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
         ...
 
-    def delete(
-        self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any
-    ) -> Text:
+    def delete(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
         ...
 
     def commit(self, *args: Any, **kwargs: Any) -> None:
@@ -65,26 +96,24 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
             self.engine = bind
 
         def query(
-            self, base_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
+            self, orm_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
         ) -> QuerySet:
-            return
+            return QuerySet(orm_model=orm_model, engine=self.engine, *args, **kwargs)
 
-        def add(
-            self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any
-        ) -> Text:
-            if model_instance.__databasename__ is NOT_SET_SENTINEL:
+        def add(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
+            if instance.__databasename__ is NOT_SET_SENTINEL:
                 raise ValueError("Database name is not set")
-            if model_instance.__tablename__ is NOT_SET_SENTINEL:
+            if instance.__tablename__ is NOT_SET_SENTINEL:
                 raise ValueError("Table name is not set")
 
-            db = self.engine[model_instance.__databasename__]
-            col = db[model_instance.__tablename__]
+            db = self.engine[instance.__databasename__]
+            col = db[instance.__tablename__]
 
-            doc = model_instance.model_dump()
+            doc = instance.model_dump()
             result = col.insert_one(doc)
 
-            model_instance._id = str(result.inserted_id)
-            return model_instance._id
+            instance._id = str(result.inserted_id)
+            return instance._id
 
         def commit(self, *args: Any, **kwargs: Any) -> None:
             with self.engine.start_session() as session:

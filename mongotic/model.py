@@ -6,8 +6,8 @@ NOT_SET_SENTINEL = object()
 
 
 class MongoBaseModel(BaseModel):
-    __databasename__ = NOT_SET_SENTINEL
-    __tablename__ = NOT_SET_SENTINEL
+    __databasename__: Text = NOT_SET_SENTINEL
+    __tablename__: Text = NOT_SET_SENTINEL
 
     _id: Optional[Text] = PrivateAttr(None)
 
