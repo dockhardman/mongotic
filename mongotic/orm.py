@@ -1,4 +1,4 @@
-from typing import Any, Protocol, Text, Type
+from typing import Any, List, Protocol, Text, Type
 
 from pymongo import MongoClient
 from typing_extensions import ParamSpec
@@ -9,7 +9,20 @@ P = ParamSpec("P")
 
 
 class QuerySet:
-    pass
+    def filter_by(self, *args: Any, **kwargs: Any) -> "QuerySet":
+        ...
+
+    def limit(self, *args: Any, **kwargs: Any) -> "QuerySet":
+        ...
+
+    def offset(self, *args: Any, **kwargs: Any) -> "QuerySet":
+        ...
+
+    def first(self, *args: Any, **kwargs: Any) -> "MongoBaseModel":
+        ...
+
+    def all(self, *args: Any, **kwargs: Any) -> List["MongoBaseModel"]:
+        ...
 
 
 class Session(Protocol):
@@ -24,6 +37,16 @@ class Session(Protocol):
         ...
 
     def add(self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
+        ...
+
+    def update(
+        self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any
+    ) -> Text:
+        ...
+
+    def delete(
+        self, model_instance: "MongoBaseModel", *args: Any, **kwargs: Any
+    ) -> Text:
         ...
 
     def commit(self, *args: Any, **kwargs: Any) -> None:

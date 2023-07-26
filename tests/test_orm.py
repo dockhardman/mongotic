@@ -48,4 +48,24 @@ def test_query_operation(mongo_engine: "MongoClient"):
     users = session.query(User).all()
     assert len(users) == 1
 
-    user = session.query(User).filter_by(name="John Doe").first()
+
+def test_update_operation(mongo_engine: "MongoClient"):
+    Session = sessionmaker(bind=mongo_engine)
+    session = Session()
+
+    alice = session.query(User).filter_by(name="Alice").first()
+
+    alice.email = "newalice@example.com"
+
+    session.commit()
+
+
+def test_delete_operation(mongo_engine: "MongoClient"):
+    Session = sessionmaker(bind=mongo_engine)
+    session = Session()
+
+    alice = session.query(User).filter_by(name="Alice").first()
+
+    session.delete(alice)
+
+    session.commit()
