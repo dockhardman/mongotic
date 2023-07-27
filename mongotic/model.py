@@ -1,4 +1,5 @@
-from typing import Any, Optional, Text, Type
+from enum import Enum, auto
+from typing import Any, Dict, List, Optional, Text, Type
 
 from pydantic import BaseModel, PrivateAttr
 from pydantic._internal import _model_construction
@@ -6,14 +7,45 @@ from pydantic._internal import _model_construction
 NOT_SET_SENTINEL = object()
 
 
+class Operator(Enum):
+    EQUAL = auto()
+
+    def __str__(self):
+        if self == Operator.EQUAL:
+            return "=="
+        else:
+            raise NotImplementedError
+
+
 class ModelFieldOperation(object):
-    def __init__(self, model_field: "ModelField", operation: Text, value: Any):
+    def __init__(self, model_field: "ModelField", operation: Operator, value: Any):
         self.model_field = model_field
         self.operation = operation
         self.value = value
 
     def __repr__(self) -> Text:
-        return f"<ModelFieldOperation({self.model_field.field_name} {self.operation} {self.value})>"
+        return (
+            "<ModelFieldOperation("
+            + f"{self.model_field.field_name} {self.operation} {self.value}"
+            ")>"
+        )
+
+    @classmethod
+    def to_mongo_filter(
+        cls, filters: List["ModelFieldOperation"], **kwargs
+    ) -> Dict[Text, Any]:
+        filter_dict: Dict[Text, Any] = {}
+
+        for _filter in filters:
+            if _filter.model_field.field_name not in filter_dict:
+                filter_dict[_filter.model_field.field_name] = {}
+
+            field_filter: Dict = filter_dict[_filter.model_field.field_name]
+
+            if _filter.operation == Operator.EQUAL:
+                field_filter.update({"$eq": _filter.value})
+
+        return filter_dict
 
 
 class ModelField(object):
@@ -25,7 +57,9 @@ class ModelField(object):
         return f"<ModelField(FieldName={self.field_name}, Bind={self.model_class.__name__})>"
 
     def __eq__(self, other: Any):
-        return ModelFieldOperation(model_field=self, operation="==", value=other)
+        return ModelFieldOperation(
+            model_field=self, operation=Operator.EQUAL, value=other
+        )
 
 
 class MongoBaseModelMeta(_model_construction.ModelMetaclass):

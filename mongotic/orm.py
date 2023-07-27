@@ -4,7 +4,12 @@ from pymongo import MongoClient
 from typing_extensions import ParamSpec
 
 from mongotic.exceptions import NotFound
-from mongotic.model import NOT_SET_SENTINEL, MongoBaseModel
+from mongotic.model import (
+    NOT_SET_SENTINEL,
+    ModelField,
+    ModelFieldOperation,
+    MongoBaseModel,
+)
 
 P = ParamSpec("P")
 
@@ -29,9 +34,29 @@ class QuerySet:
         self._col_name: Text = self.orm_model.__tablename__
         self._limit = 5
         self._offset = 0
+        self._filters: List["ModelFieldOperation"] = []
 
-    def filter_by(self, *args: Any, **kwargs: Any) -> "QuerySet":
-        ...
+    def filter(
+        self, *model_field_operations: "ModelFieldOperation", **kwargs: Any
+    ) -> "QuerySet":
+        if not model_field_operations and not kwargs:
+            raise ValueError("No filter is provided")
+
+        self._filters.extend(model_field_operations)
+
+        for k, v in kwargs.items():
+            self._filters.append(
+                ModelField(field_name=k, model_class=self.orm_model) == v
+            )
+
+        return self
+
+    def filter_by(self, **kwargs: Any) -> "QuerySet":
+        for k, v in kwargs.items():
+            self._filters.append(
+                ModelField(field_name=k, model_class=self.orm_model) == v
+            )
+        return self
 
     def limit(self, *args: Any, **kwargs: Any) -> "QuerySet":
         ...
@@ -41,7 +66,9 @@ class QuerySet:
 
     def first(self, *args: Any, **kwargs: Any) -> "MongoBaseModel":
         collection = self.engine[self._db_name][self._col_name]
-        doc_raw = collection.find_one()
+
+        filter_body = ModelFieldOperation.to_mongo_filter(filters=self._filters)
+        doc_raw = collection.find_one(filter=filter_body)
         if not doc_raw:
             raise NotFound
 
@@ -53,7 +80,10 @@ class QuerySet:
         docs: List["MongoBaseModel"] = []
 
         collection = self.engine[self._db_name][self._col_name]
-        for _doc in collection.find().skip(self._offset).limit(self._limit):
+
+        filter_body = ModelFieldOperation.to_mongo_filter(filters=self._filters)
+
+        for _doc in collection.find(filter_body).skip(self._offset).limit(self._limit):
             _doc["_id"] = str(_doc["_id"])
             docs.append(self.orm_model(**_doc))
 

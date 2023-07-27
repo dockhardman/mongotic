@@ -51,6 +51,18 @@ def test_query_operation(mongo_engine: "MongoClient"):
     users = session.query(User).all()
     assert len(users) > 0
 
+    users = session.query(User).filter(User.company == test_company).all()
+    assert len(users) > 0
+
+    users = session.query(User).filter(company=test_company).all()
+    assert len(users) > 0
+
+    users = session.query(User).filter_by(company=test_company).all()
+    assert len(users) > 0
+
+    users = session.query(User).filter(User.company == "ERROR_COMPANY").all()
+    assert len(users) == 0
+
 
 def test_update_operation(mongo_engine: "MongoClient"):
     Session = sessionmaker(bind=mongo_engine)
