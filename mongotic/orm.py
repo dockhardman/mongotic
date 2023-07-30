@@ -202,11 +202,9 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                 _add_instance._session = self
 
             for _update_instance in self._update_instances:
-                _instance = _update_instance[0]
-                _field_to_update = _update_instance[1]
-                _new_value = _update_instance[2]
-                _db = engine[_add_instance.__databasename__]
-                _col = _db[_add_instance.__tablename__]
+                _instance, _field_to_update, _new_value = _update_instance
+                _db = engine[_instance.__databasename__]
+                _col = _db[_instance.__tablename__]
                 _col.update_one(
                     {"_id": _instance._id}, {"$set": {_field_to_update: _new_value}}
                 )

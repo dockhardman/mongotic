@@ -68,9 +68,9 @@ def test_update_operation(mongo_engine: "MongoClient"):
     Session = sessionmaker(bind=mongo_engine)
     session = Session()
 
-    alice = session.query(User).filter_by(name="Alice").first()
+    alice = session.query(User).filter_by(company=test_company).first()
 
-    alice.email = "newalice@example.com"
+    alice.email = "new_johndoe@example.com"
 
     session.commit()
 
