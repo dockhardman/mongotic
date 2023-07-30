@@ -37,8 +37,8 @@ def test_add_operation(mongo_engine: "MongoClient"):
     new_user = User(
         name="John Doe", email="johndoe@example.com", company=test_company, age=30
     )
-    new_user_id = session.add(new_user)
-    assert new_user_id
+    session.add(new_user)
+    session.commit()
 
 
 def test_query_operation(mongo_engine: "MongoClient"):

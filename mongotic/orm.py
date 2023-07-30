@@ -1,6 +1,7 @@
-from typing import Any, List, Protocol, Text, Type
+from typing import Any, List, Optional, Protocol, Text, Type
 
 from pymongo import MongoClient
+from pymongo.client_session import ClientSession
 from typing_extensions import ParamSpec
 
 from mongotic.exceptions import NotFound
@@ -20,10 +21,12 @@ class QuerySet:
         orm_model: Type["MongoBaseModel"],
         *args: Any,
         engine: "MongoClient",
+        session: "Session",
         **kwargs: Any
     ):
         self.orm_model = orm_model
         self.engine = engine
+        self.session = session
 
         if self.orm_model.__databasename__ is NOT_SET_SENTINEL:
             raise ValueError("Database name is not set")
@@ -101,7 +104,7 @@ class Session(Protocol):
     ) -> QuerySet:
         ...
 
-    def add(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
+    def add(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> None:
         ...
 
     def update(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
@@ -125,17 +128,24 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
         def __init__(self, *args, **kwargs: Any):
             self.engine = bind
 
+            self.client_session: Optional["ClientSession"] = None
+
+            self._add_instances: List["MongoBaseModel"] = []
+
         def query(
             self, orm_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
         ) -> QuerySet:
-            return QuerySet(orm_model=orm_model, engine=self.engine, *args, **kwargs)
+            return QuerySet(
+                orm_model=orm_model, *args, engine=self.engine, session=self, **kwargs
+            )
 
-        def add(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
+        def add(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> None:
             if instance.__databasename__ is NOT_SET_SENTINEL:
                 raise ValueError("Database name is not set")
             if instance.__tablename__ is NOT_SET_SENTINEL:
                 raise ValueError("Table name is not set")
 
+            self._add_instances.append(instance)
             db = self.engine[instance.__databasename__]
             col = db[instance.__tablename__]
 
@@ -146,15 +156,46 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
             return instance._id
 
         def commit(self, *args: Any, **kwargs: Any) -> None:
-            with self.engine.start_session() as session:
-                pass
+            if self.client_session is None:
+                with self:
+                    assert (
+                        self.client_session is not None
+                    ), "Client session should be created in Session.__enter__"
+                    with self.client_session.start_transaction():
+                        self._commit(
+                            pymongo_client_session=self.client_session,
+                            engine=self.engine,
+                            add_instances=self._add_instances,
+                        )
+
+            else:
+                with self.client_session.start_transaction():
+                    self._commit(
+                        pymongo_client_session=self.client_session,
+                        engine=self.engine,
+                        add_instances=self._add_instances,
+                    )
 
         def __enter__(self):
-            self.session = self.engine.start_session()
+            self.client_session = self.engine.start_session()
             return self
 
         def __exit__(self, exc_type, exc_value, traceback):
-            self.session.end_session()
-            self.session = None
+            self.client_session.end_session()
+            self.client_session = None
+
+        def _commit(
+            self,
+            pymongo_client_session: "ClientSession",
+            engine: "MongoClient",
+            add_instances: List["MongoBaseModel"],
+        ) -> None:
+            for _add_instance in add_instances:
+                _db = engine[_add_instance.__databasename__]
+                _col = _db[_add_instance.__tablename__]
+                _insert_one_result = _col.insert_one(
+                    _add_instance.model_dump(), session=pymongo_client_session
+                )
+                _add_instance._id = str(_insert_one_result.inserted_id)
 
     return _Session
