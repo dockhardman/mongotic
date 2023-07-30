@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Protocol, Text, Type
+from typing import Any, List, Optional, Protocol, Text, Tuple, Type
 
 from pymongo import MongoClient
 from pymongo.client_session import ClientSession
@@ -75,8 +75,9 @@ class QuerySet:
         if not doc_raw:
             raise NotFound
 
-        doc_raw["_id"] = str(doc_raw["_id"])
         doc = self.orm_model(**doc_raw)
+        doc._id = str(doc._id)
+        doc._session = self.session
         return doc
 
     def all(self, *args: Any, **kwargs: Any) -> List["MongoBaseModel"]:
@@ -87,14 +88,19 @@ class QuerySet:
         filter_body = ModelFieldOperation.to_mongo_filter(filters=self._filters)
 
         for _doc in collection.find(filter_body).skip(self._offset).limit(self._limit):
-            _doc["_id"] = str(_doc["_id"])
-            docs.append(self.orm_model(**_doc))
+            _doc_orm = self.orm_model(**_doc)
+            _doc_orm._id = str(_doc_orm._id)
+            _doc_orm._session = self.session
+            docs.append(_doc_orm)
 
         return docs
 
 
 class Session(Protocol):
     engine: "MongoClient"
+    client_session: Optional["ClientSession"]
+    _add_instances: List["MongoBaseModel"]
+    _update_instances: List[Tuple["MongoBaseModel", Text, Any]]
 
     def __init__(self, bind_engine: MongoClient, **kwargs: Any):
         ...
@@ -131,6 +137,7 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
             self.client_session: Optional["ClientSession"] = None
 
             self._add_instances: List["MongoBaseModel"] = []
+            self._update_instances: List[Tuple["MongoBaseModel", Text, Any]] = []
 
         def query(
             self, orm_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
@@ -146,14 +153,6 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                 raise ValueError("Table name is not set")
 
             self._add_instances.append(instance)
-            db = self.engine[instance.__databasename__]
-            col = db[instance.__tablename__]
-
-            doc = instance.model_dump()
-            result = col.insert_one(doc)
-
-            instance._id = str(result.inserted_id)
-            return instance._id
 
         def commit(self, *args: Any, **kwargs: Any) -> None:
             if self.client_session is None:
@@ -166,6 +165,7 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                             pymongo_client_session=self.client_session,
                             engine=self.engine,
                             add_instances=self._add_instances,
+                            update_instances=self._update_instances,
                         )
 
             else:
@@ -174,6 +174,7 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                         pymongo_client_session=self.client_session,
                         engine=self.engine,
                         add_instances=self._add_instances,
+                        update_instances=self._update_instances,
                     )
 
         def __enter__(self):
@@ -189,6 +190,7 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
             pymongo_client_session: "ClientSession",
             engine: "MongoClient",
             add_instances: List["MongoBaseModel"],
+            update_instances: List[Tuple["MongoBaseModel", Text, Any]],
         ) -> None:
             for _add_instance in add_instances:
                 _db = engine[_add_instance.__databasename__]
@@ -197,5 +199,16 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                     _add_instance.model_dump(), session=pymongo_client_session
                 )
                 _add_instance._id = str(_insert_one_result.inserted_id)
+                _add_instance._session = self
+
+            for _update_instance in self._update_instances:
+                _instance = _update_instance[0]
+                _field_to_update = _update_instance[1]
+                _new_value = _update_instance[2]
+                _db = engine[_add_instance.__databasename__]
+                _col = _db[_add_instance.__tablename__]
+                _col.update_one(
+                    {"_id": _instance._id}, {"$set": {_field_to_update: _new_value}}
+                )
 
     return _Session

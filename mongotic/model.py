@@ -1,8 +1,11 @@
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Text, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Text, Type
 
 from pydantic import BaseModel, PrivateAttr
 from pydantic._internal import _model_construction
+
+if TYPE_CHECKING:
+    from mongotic.orm import Session
 
 NOT_SET_SENTINEL = object()
 
@@ -78,6 +81,12 @@ class MongoBaseModel(BaseModel, metaclass=MongoBaseModelMeta):
     __tablename__: Text = NOT_SET_SENTINEL
 
     _id: Optional[Text] = PrivateAttr(None)
+    _session: Optional["Session"] = PrivateAttr(None)
+
+    def __setattr__(self, name: Text, value: Any) -> None:
+        super().__setattr__(name, value)
+        if self._session is not None and name not in ["_id", "_session"]:
+            self._session._update_instances.append(tuple([self, name, value]))
 
 
 if __name__ == "__main__":
@@ -102,6 +111,8 @@ if __name__ == "__main__":
     new_user = User(
         name="John Doe", email="johndoe@example.com", company="test_company", age=30
     )
-    print("new_user:", new_user.name)
-    print(User.name)
-    print(User.name == "ggwp")
+    new_user.name = "GGWP"
+    print(new_user)
+    # print("new_user:", new_user.name)
+    # print(User.name)
+    # print(User.name == "ggwp")
