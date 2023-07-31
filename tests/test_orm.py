@@ -79,8 +79,9 @@ def test_delete_operation(mongo_engine: "MongoClient"):
     Session = sessionmaker(bind=mongo_engine)
     session = Session()
 
-    alice = session.query(User).filter_by(name="Alice").first()
+    user = session.query(User).filter_by(company=test_company).first()
+    print(user._id)
 
-    session.delete(alice)
+    session.delete(user)
 
     session.commit()

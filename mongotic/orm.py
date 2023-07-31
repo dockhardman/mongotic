@@ -1,5 +1,6 @@
 from typing import Any, List, Optional, Protocol, Text, Tuple, Type
 
+from bson.objectid import ObjectId
 from pymongo import MongoClient
 from pymongo.client_session import ClientSession
 from typing_extensions import ParamSpec
@@ -76,7 +77,7 @@ class QuerySet:
             raise NotFound
 
         doc = self.orm_model(**doc_raw)
-        doc._id = str(doc._id)
+        doc._id = str(doc_raw["_id"])
         doc._session = self.session
         return doc
 
@@ -89,7 +90,7 @@ class QuerySet:
 
         for _doc in collection.find(filter_body).skip(self._offset).limit(self._limit):
             _doc_orm = self.orm_model(**_doc)
-            _doc_orm._id = str(_doc_orm._id)
+            _doc_orm._id = str(_doc["_id"])
             _doc_orm._session = self.session
             docs.append(_doc_orm)
 
@@ -113,10 +114,7 @@ class Session(Protocol):
     def add(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> None:
         ...
 
-    def update(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
-        ...
-
-    def delete(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> Text:
+    def delete(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> None:
         ...
 
     def commit(self, *args: Any, **kwargs: Any) -> None:
@@ -138,6 +136,7 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
 
             self._add_instances: List["MongoBaseModel"] = []
             self._update_instances: List[Tuple["MongoBaseModel", Text, Any]] = []
+            self._delete_instances: List["MongoBaseModel"] = []
 
         def query(
             self, orm_model: Type["MongoBaseModel"], *args: Any, **kwargs: Any
@@ -153,6 +152,14 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                 raise ValueError("Table name is not set")
 
             self._add_instances.append(instance)
+
+        def delete(self, instance: "MongoBaseModel", *args: Any, **kwargs: Any) -> None:
+            if instance.__databasename__ is NOT_SET_SENTINEL:
+                raise ValueError("Database name is not set")
+            if instance.__tablename__ is NOT_SET_SENTINEL:
+                raise ValueError("Table name is not set")
+
+            self._delete_instances.append(instance)
 
         def commit(self, *args: Any, **kwargs: Any) -> None:
             if self.client_session is None:
@@ -208,5 +215,10 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                 _col.update_one(
                     {"_id": _instance._id}, {"$set": {_field_to_update: _new_value}}
                 )
+
+            for _delete_instance in self._delete_instances:
+                _db = engine[_delete_instance.__databasename__]
+                _col = _db[_delete_instance.__tablename__]
+                _col.delete_one({"_id": ObjectId(_delete_instance._id)})
 
     return _Session
