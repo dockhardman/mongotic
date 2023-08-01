@@ -80,7 +80,6 @@ def test_delete_operation(mongo_engine: "MongoClient"):
     session = Session()
 
     user = session.query(User).filter_by(company=test_company).first()
-    print(user._id)
 
     session.delete(user)
 
