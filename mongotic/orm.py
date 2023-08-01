@@ -184,6 +184,10 @@ def sessionmaker(bind: "MongoClient") -> Type[Session]:
                         update_instances=self._update_instances,
                     )
 
+            self._add_instances = []
+            self._update_instances = []
+            self._delete_instances = []
+
         def __enter__(self):
             self.client_session = self.engine.start_session()
             return self
