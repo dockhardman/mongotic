@@ -157,32 +157,3 @@ class MongoBaseModel(BaseModel, metaclass=MongoBaseModelMeta):
         super().__setattr__(name, value)
         if self._session is not None and name not in ["_id", "_session"]:
             self._session._update_instances.append(tuple([self, name, value]))
-
-
-if __name__ == "__main__":
-    from datetime import datetime
-
-    from pyassorted.datetime import aware_datetime_now
-    from pydantic import Field
-    from rich import print
-
-    class User(MongoBaseModel):
-        __databasename__ = "test"
-        __tablename__ = "user"
-
-        name: Text = Field(..., max_length=50)
-        email: Text = Field(...)
-        company: Optional[Text] = Field(None, max_length=50)
-        age: Optional[int] = None
-        created_at: Optional[datetime] = Field(..., default_factory=aware_datetime_now)
-        updated_at: Optional[datetime] = Field(..., default_factory=aware_datetime_now)
-
-    print(User.model_fields)
-    new_user = User(
-        name="John Doe", email="johndoe@example.com", company="test_company", age=30
-    )
-    new_user.name = "GGWP"
-    print(new_user)
-    # print("new_user:", new_user.name)
-    # print(User.name)
-    # print(User.name == "ggwp")
