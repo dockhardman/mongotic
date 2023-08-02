@@ -12,10 +12,31 @@ NOT_SET_SENTINEL = object()
 
 class Operator(Enum):
     EQUAL = auto()
+    NOT_EQUAL = auto()
+    GREATER_THAN = auto()
+    GREATER_THAN_EQUAL = auto()
+    LESS_THAN = auto()
+    LESS_THAN_EQUAL = auto()
+    IN = auto()
+    NOT_IN = auto()
 
     def __str__(self):
         if self == Operator.EQUAL:
             return "=="
+        elif self == Operator.NOT_EQUAL:
+            return "!="
+        elif self == Operator.GREATER_THAN:
+            return ">"
+        elif self == Operator.GREATER_THAN_EQUAL:
+            return ">="
+        elif self == Operator.LESS_THAN:
+            return "<"
+        elif self == Operator.LESS_THAN_EQUAL:
+            return "<="
+        elif self == Operator.IN:
+            return "in"
+        elif self == Operator.NOT_IN:
+            return "not in"
         else:
             raise NotImplementedError
 
@@ -47,6 +68,22 @@ class ModelFieldOperation(object):
 
             if _filter.operation == Operator.EQUAL:
                 field_filter.update({"$eq": _filter.value})
+            elif _filter.operation == Operator.NOT_EQUAL:
+                field_filter.update({"$ne": _filter.value})
+            elif _filter.operation == Operator.GREATER_THAN:
+                field_filter.update({"$gt": _filter.value})
+            elif _filter.operation == Operator.GREATER_THAN_EQUAL:
+                field_filter.update({"$gte": _filter.value})
+            elif _filter.operation == Operator.LESS_THAN:
+                field_filter.update({"$lt": _filter.value})
+            elif _filter.operation == Operator.LESS_THAN_EQUAL:
+                field_filter.update({"$lte": _filter.value})
+            elif _filter.operation == Operator.IN:
+                field_filter.update({"$in": _filter.value})
+            elif _filter.operation == Operator.NOT_IN:
+                field_filter.update({"$nin": _filter.value})
+            else:
+                raise NotImplementedError
 
         return filter_dict
 
@@ -62,6 +99,39 @@ class ModelField(object):
     def __eq__(self, other: Any):
         return ModelFieldOperation(
             model_field=self, operation=Operator.EQUAL, value=other
+        )
+
+    def __ne__(self, other: Any):
+        return ModelFieldOperation(
+            model_field=self, operation=Operator.NOT_EQUAL, value=other
+        )
+
+    def __gt__(self, other: Any):
+        return ModelFieldOperation(
+            model_field=self, operation=Operator.GREATER_THAN, value=other
+        )
+
+    def __ge__(self, other: Any):
+        return ModelFieldOperation(
+            model_field=self, operation=Operator.GREATER_THAN_EQUAL, value=other
+        )
+
+    def __lt__(self, other: Any):
+        return ModelFieldOperation(
+            model_field=self, operation=Operator.LESS_THAN, value=other
+        )
+
+    def __le__(self, other: Any):
+        return ModelFieldOperation(
+            model_field=self, operation=Operator.LESS_THAN_EQUAL, value=other
+        )
+
+    def in_(self, other: Any):
+        return ModelFieldOperation(model_field=self, operation=Operator.IN, value=other)
+
+    def not_in(self, other: Any):
+        return ModelFieldOperation(
+            model_field=self, operation=Operator.NOT_IN, value=other
         )
 
 
@@ -87,32 +157,3 @@ class MongoBaseModel(BaseModel, metaclass=MongoBaseModelMeta):
         super().__setattr__(name, value)
         if self._session is not None and name not in ["_id", "_session"]:
             self._session._update_instances.append(tuple([self, name, value]))
-
-
-if __name__ == "__main__":
-    from datetime import datetime
-
-    from pyassorted.datetime import aware_datetime_now
-    from pydantic import Field
-    from rich import print
-
-    class User(MongoBaseModel):
-        __databasename__ = "test"
-        __tablename__ = "user"
-
-        name: Text = Field(..., max_length=50)
-        email: Text = Field(...)
-        company: Optional[Text] = Field(None, max_length=50)
-        age: Optional[int] = None
-        created_at: Optional[datetime] = Field(..., default_factory=aware_datetime_now)
-        updated_at: Optional[datetime] = Field(..., default_factory=aware_datetime_now)
-
-    print(User.model_fields)
-    new_user = User(
-        name="John Doe", email="johndoe@example.com", company="test_company", age=30
-    )
-    new_user.name = "GGWP"
-    print(new_user)
-    # print("new_user:", new_user.name)
-    # print(User.name)
-    # print(User.name == "ggwp")

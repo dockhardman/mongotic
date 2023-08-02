@@ -62,11 +62,17 @@ class QuerySet:
             )
         return self
 
-    def limit(self, *args: Any, **kwargs: Any) -> "QuerySet":
-        ...
+    def limit(self, value: int, *args: Any, **kwargs: Any) -> "QuerySet":
+        if value < 0:
+            raise ValueError("Limit value must be positive")
+        self._limit = value
+        return self
 
-    def offset(self, *args: Any, **kwargs: Any) -> "QuerySet":
-        ...
+    def offset(self, value: int, *args: Any, **kwargs: Any) -> "QuerySet":
+        if value < 0:
+            raise ValueError("Offset value must be positive")
+        self._offset = value
+        return self
 
     def first(self, *args: Any, **kwargs: Any) -> "MongoBaseModel":
         collection = self.engine[self._db_name][self._col_name]
