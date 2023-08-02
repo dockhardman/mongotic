@@ -126,10 +126,10 @@ class ModelField(object):
             model_field=self, operation=Operator.LESS_THAN_EQUAL, value=other
         )
 
-    def __in__(self, other: Any):
+    def in_(self, other: Any):
         return ModelFieldOperation(model_field=self, operation=Operator.IN, value=other)
 
-    def __not_in__(self, other: Any):
+    def not_in(self, other: Any):
         return ModelFieldOperation(
             model_field=self, operation=Operator.NOT_IN, value=other
         )
